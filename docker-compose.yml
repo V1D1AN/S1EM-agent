@@ -1,0 +1,102 @@
+version: "2.2"
+services:
+
+  stoq:
+    image: v1d1an/stoq:3.0.5
+    command: run -A mwdb
+    container_name: stoq
+    user: root                  
+    restart: always                    
+    volumes:
+      - ./rules/yara:/rules/yara:ro
+      - ./stoq/custom:/rules/custom:ro 
+      - ./stoq/stoq.cfg:/home/stoq/.stoq/stoq.cfg:ro
+      - stoq:/home/stoq/tmp/                    
+      - /data/cowrie/downloads:/files/cowrie            
+      - /data/adbhoney/downloads:/files/adbhoney                  
+    networks:  
+      - s1em  
+
+  auditbeat:
+    image: 'docker.elastic.co/beats/auditbeat:7.17.2'
+    container_name: auditbeat
+    hostname: tpot
+    restart: always
+    user: root
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+    privileged: true
+    pid: host
+    volumes:
+      - ./auditbeat/auditbeat.yml:/usr/share/auditbeat/auditbeat.yml:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - s1em
+    cpus: 0.1
+
+  filebeat:
+    image: 'docker.elastic.co/beats/filebeat:7.17.2'
+    container_name: filebeat
+    user: root
+    hostname: tpot
+    restart: always
+    volumes:
+      - /data:/data:ro
+      - /data/suricata/log:/var/log/suricata:ro
+      - /data/nginx/log:/var/log/nginx:ro
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/modules.d/suricata.yml:/usr/share/filebeat/modules.d/suricata.yml:ro
+      - ./filebeat/modules.d/nginx.yml:/usr/share/filebeat/modules.d/nginx.yml:ro
+    networks:
+      - s1em
+
+  logstash:
+    image: 'docker.elastic.co/logstash/logstash:7.17.2'
+    container_name: logstash
+    hostname: tpot
+    restart: always
+    user: root
+    env_file:
+      - ./logstash/elk_environment
+    volumes:
+      - /data:/data
+      - ./logstash/geoip:/usr/share/logstash/geoip:ro
+      - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/config/jvm.options:/usr/share/logstash/config/jvm.options:ro
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    networks:
+      - s1em
+
+  metricbeat:
+    image: 'docker.elastic.co/beats/metricbeat:7.17.2'
+    container_name: metricbeat
+    restart: always
+    hostname: tpot
+    command: ["-system.hostfs=/hostfs", "-e"]
+    user: root
+    volumes:
+      - ./metricbeat/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+      - ./metricbeat/modules.d/docker.yml:/usr/share/metricbeat/modules.d/docker.yml:ro
+      - ./metricbeat/modules.d/kibana.yml:/usr/share/metricbeat/modules.d/kibana.yml:ro
+      - ./metricbeat/modules.d/logstash.yml:/usr/share/metricbeat/modules.d/logstash.yml:ro
+      - ./metricbeat/modules.d/elasticsearch.yml:/usr/share/metricbeat/modules.d/elasticsearch.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/hostfs/proc:ro
+      - /:/hostfs:ro
+    networks:
+      - s1em
+    cpus: 0.1
+
+volumes:
+   stoq:
+networks:
+   s1em:
+     driver: bridge
+   etc_default:
+     external: true

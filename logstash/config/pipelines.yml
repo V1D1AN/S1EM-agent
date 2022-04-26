@@ -1,0 +1,4 @@
+- pipeline.id: tpot
+  path.config: "/usr/share/logstash/pipeline/tpot/*.conf"
+  pipeline.workers: 3
+
